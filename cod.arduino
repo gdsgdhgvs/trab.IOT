@@ -1,0 +1,45 @@
+#include <SoftwareSerial.h>
+#include <TinyGPSPlus.h>
+
+TinyGPSPlus gps;
+SoftwareSerial gpsSerial(4, 5); // RX, TX GPS
+SoftwareSerial espSerial(3, 2); // RX, TX ESP8266
+
+void setup() {
+  Serial.begin(9600);
+  gpsSerial.begin(9600);
+  espSerial.begin(9600);
+
+  sendCommand("AT", 1000);
+  sendCommand("AT+CWMODE=1", 1000);
+  sendCommand("AT+CWJAP=\"Mara\",\"naty1636\"", 5000); // Substitua aqui
+}
+
+void loop() {
+  while (gpsSerial.available()) {
+    char c = gpsSerial.read();
+    gps.encode(c);
+
+    if (gps.location.isUpdated()) {
+      float lat = gps.location.lat();
+      float lng = gps.location.lng();
+      String dados = "lat=" + String(lat, 6) + "&lng=" + String(lng, 6);
+
+      sendCommand("AT+CIPSTART=\"TCP\",\"192.168.1.27\",80", 2000); // IP do seu PC
+      String req = "GET /gps_site/receber.php?" + dados + " HTTP/1.1\r\nHost: 192.168.1.27\r\nConnection: close\r\n\r\n";
+      sendCommand("AT+CIPSEND=" + String(req.length()), 2000);
+      espSerial.print(req);
+      delay(10000);
+    }
+  }
+}
+
+void sendCommand(String cmd, const int timeout) {
+  espSerial.println(cmd);
+  long t = millis();
+  while ((millis() - t) < timeout) {
+    while (espSerial.available()) {
+      Serial.write(espSerial.read());
+    }
+  }
+}
